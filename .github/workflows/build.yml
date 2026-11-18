@@ -29,6 +29,34 @@ jobs:
       - name: Generate Android project files
         run: flutter create --platforms=android .
 
+      - name: Fix Android compile SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts")
+          ]
+
+          found = False
+
+          for file in files:
+              if file.exists():
+                  found = True
+                  content = file.read_text()
+                  content, count = re.subn(
+                      r'(?m)^(\s*compileSdk\s*(?:=\s*)?).*$',
+                      lambda m: m.group(1) + '36',
+                      content
+                  )
+                  file.write_text(content)
+                  print(f"Updated {file}, changes: {count}")
+
+          if not found:
+              raise SystemExit("Android Gradle file not found")
+
       - name: Install dependencies
         run: flutter pub get
 
