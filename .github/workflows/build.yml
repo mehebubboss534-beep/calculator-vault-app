@@ -27,12 +27,7 @@ jobs:
           channel: stable
 
       - name: Generate Android project files
-        run: flutter create --platforms=android --org com.calculatorvault .
-
-      - name: Set Android compile SDK to 36
-        run: |
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle
-          sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 36/' android/app/build.gradle
+        run: flutter create --platforms=android .
 
       - name: Install dependencies
         run: flutter pub get
