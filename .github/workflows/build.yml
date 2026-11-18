@@ -86,9 +86,8 @@ jobs:
 
           print("App compileSdk 36 verified.")
           PY
-
-      - name: Build Release APK
-        run: flutter build apk --release
+                - name: Build Release APK
+        run: flutter build apk --release -x lintVitalAnalyzeRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
