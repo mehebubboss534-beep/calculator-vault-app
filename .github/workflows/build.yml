@@ -31,10 +31,10 @@ jobs:
       - name: Generate Android project
         run: flutter create --platforms=android .
 
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Fix Android compileSdk
+      - name: Fix compileSdk
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -46,8 +46,6 @@ jobs:
               Path(os.environ.get("PUB_CACHE", str(Path.home() / ".pub-cache")))
           ]
 
-          changed = []
-
           for root in roots:
               if not root.exists():
                   continue
@@ -56,46 +54,43 @@ jobs:
                   for file in root.glob(pattern):
                       try:
                           content = file.read_text()
-                          updated, count = re.subn(
+                          updated = re.sub(
                               r'(?m)^(\s*compileSdk(?:Version)?\s*(?:=\s*)?).*$',
                               lambda m: m.group(1) + "36",
                               content
                           )
-
-                          if count:
-                              file.write_text(updated)
-                              changed.append(str(file))
+                          file.write_text(updated)
                       except (OSError, UnicodeError):
                           pass
 
-          print("Updated Gradle files:")
-          for file in changed:
-              print(file)
+          app_files = list(Path("android/app").glob("build.gradle*"))
 
-          app = Path("android/app")
-          candidates = list(app.glob("build.gradle*"))
-
-          if not candidates:
+          if not app_files:
               raise SystemExit("App Gradle file not found")
 
-          for file in candidates:
-              content = file.read_text()
-              if not re.search(
+          if not any(
+              re.search(
                   r'(?m)^\s*compileSdk(?:Version)?\s*(?:=\s*)?36\s*$',
-                  content
-              ):
-                  raise SystemExit(f"compileSdk 36 not verified in {file}")
+                  f.read_text()
+              )
+              for f in app_files
+          ):
+              raise SystemExit("App compileSdk 36 not verified")
 
-          print("App compileSdk 36 verified.")
+          print("compileSdk 36 verified")
           PY
 
       - name: Build Release APK
-        run: flutter build apk --release -x lintVitalAnalyzeRelease
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease -x :video_player_android:lintVitalAnalyzeRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Calculator-Vault-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
+          
