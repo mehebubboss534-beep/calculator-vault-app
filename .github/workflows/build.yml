@@ -7,6 +7,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,41 +29,65 @@ jobs:
         with:
           channel: stable
 
-      - name: Generate Android project files
+      - name: Generate Android project
         run: flutter create --platforms=android .
 
-      - name: Fix Android compile SDK
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Fix compileSdk for app and plugins
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import os
           import re
 
-          files = [
-              Path("android/app/build.gradle"),
-              Path("android/app/build.gradle.kts")
+          roots = [
+              Path("android"),
+              Path(os.environ.get("PUB_CACHE", str(Path.home() / ".pub-cache")))
           ]
 
-          found = False
+          changed = []
 
-          for file in files:
-              if file.exists():
-                  found = True
-                  content = file.read_text()
-                  content, count = re.subn(
-                      r'(?m)^(\s*compileSdk\s*(?:=\s*)?).*$',
-                      lambda m: m.group(1) + '36',
-                      content
-                  )
-                  file.write_text(content)
-                  print(f"Updated {file}, changes: {count}")
+          for root in roots:
+              if not root.exists():
+                  continue
 
-          if not found:
-              raise SystemExit("Android Gradle file not found")
+              for pattern in ("**/build.gradle", "**/build.gradle.kts"):
+                  for file in root.glob(pattern):
+                      try:
+                          content = file.read_text()
+                          updated, count = re.subn(
+                              r'(?m)^(\s*compileSdk(?:Version)?\s*(?:=\s*)?).*$',
+                              lambda m: m.group(1) + "36",
+                              content
+                          )
 
-      - name: Install dependencies
-        run: flutter pub get
+                          if count:
+                              file.write_text(updated)
+                              changed.append(str(file))
+                      except (OSError, UnicodeError):
+                          pass
 
-      - name: Build APK
+          print("Updated Gradle files:")
+          for file in changed:
+              print(file)
+
+          app = Path("android/app")
+          candidates = list(app.glob("build.gradle*"))
+
+          if not candidates:
+              raise SystemExit("App Gradle file not found")
+
+          for file in candidates:
+              content = file.read_text()
+              if not re.search(r'(?m)^\s*compileSdk(?:Version)?\s*(?:=\s*)?36\s*$', content):
+                  raise SystemExit(f"compileSdk 36 not verified in {file}")
+
+          print("App compileSdk 36 verified.")
+          PY
+
+      - name: Build Release APK
         run: flutter build apk --release
 
       - name: Upload APK
@@ -68,3 +95,5 @@ jobs:
         with:
           name: Calculator-Vault-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
